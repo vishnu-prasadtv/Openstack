@@ -35,10 +35,10 @@ Other supporting services include
 
 The example configuration creates one flat external network and one VXLAN project (tenant) network. However, this configuration also supports VLAN external networks, VLAN project networks, and GRE project networks.
 
-## Prerequisites¶
+## Prerequisites 
 
 
-### Infrastructure¶
+### Infrastructure 
 1. Controller node with:
  - One network interface: management.
 2. Network node with four network interfaces:
@@ -85,23 +85,23 @@ NOTE- For VLAN external and project networks, the physical network infrastructur
 
 ## Openstack services in:
 
-### Controller node¶
+### Controller node 
 1. Operational SQL server with neutron database and appropriate configuration in the ```neutron.conf``` file. MySQL
 2. Operational message queue service with appropriate configuration in the ```neutron.conf``` file. RabbitMQ
 3. Operational OpenStack Identity service with appropriate configuration in the ```neutron.conf``` file. Keystone
 4. Operational OpenStack Compute controller/management service with appropriate configuration to use neutron in the ```nova.conf``` file. Nova
 5. Neutron server service, ML2 plug-in, and any dependencies.
 
-### Network node¶
+### Network node 
 1. Operational OpenStack Identity service with appropriate configuration in the ```neutron.conf``` file.
 2. Open vSwitch service, Open vSwitch agent, L3 agent, DHCP agent, metadata agent, and any dependencies.
 
-### Compute nodes¶
+### Compute nodes 
 1. Operational OpenStack Identity service with appropriate configuration in the ```neutron.conf``` file.
 2. Operational OpenStack Compute controller/management service with appropriate configuration to use neutron in the ```nova.conf``` file.
 3. Open vSwitch service, Open vSwitch agent, and any dependencies.
  
-# Architecture¶
+# Architecture 
 
 - The classic architecture provides basic virtual networking components in your environment.
 - Routing among project and external networks resides completely on the network node.
@@ -160,7 +160,7 @@ NOTE:
 - North-south network traffic travels between an instance and external network, typically the Internet.
 - East-west network traffic travels between instances.
 
-## Case 1: North-south for instances with a fixed IP address¶
+## Case 1: North-south for instances with a fixed IP address 
 
 For instances with a fixed IP address, the network node routes north-south network traffic between project and external networks.
 
@@ -177,7 +177,7 @@ For instances with a fixed IP address, the network node routes north-south netwo
 - Instance 1 resides on compute node 1 and uses a project network.
 - The instance sends a packet to a host on the external network.
 
-#### Compute Node1 - The following steps are involved: Case-1
+#### Compute Node1 -  The packet flow is as mentioned below: Case-1
 1. The instance 1 ```tap``` interface (1) forwards the packet to the Linux bridge ```qbr```. The packet contains destination MAC address *TG* because the destination resides on another network.
 2. Security group rules (2) on the Linux bridge ```qbr``` handle state tracking for the packet.
 3. The Linux bridge ```qbr``` forwards the packet to the Open vSwitch integration bridge ```br-int```.
@@ -193,7 +193,7 @@ For instances with a fixed IP address, the network node routes north-south netwo
 
 <img width="1001" height="490" alt="image" src="https://github.com/user-attachments/assets/b64a1010-6151-47d8-b28a-25ccf6f0c931" />
 
-#### Network node - The following steps are involved: Case-1
+#### Network node -  The packet flow is as mentioned below: Case-1
 
 1. For VLAN project networks:
     - The VLAN interface forwards the packet to the Open vSwitch VLAN bridge `br-vlan`.
@@ -230,7 +230,7 @@ For instances with a floating IP address, the network node routes north-south ne
 - Instance 1 resides on compute node 1 and uses a project network.
 - The instance receives a packet from a host on the external network.
 
-#### Network node - The following steps are involved: Case-2
+#### Network node -  The packet flow is as mentioned below: Case-2
 
 1. The external interface forwards the packet to the Open vSwitch external bridge `br-ex`.
 2. The Open vSwitch external bridge `br-ex` forwards the packet to the Open vSwitch integration bridge `br-int`.
@@ -250,7 +250,7 @@ For instances with a floating IP address, the network node routes north-south ne
 <img width="993" height="690" alt="image" src="https://github.com/user-attachments/assets/75ff00b7-f8c5-454b-82f5-34f1a7291efb" />
 
   
-#### Compute Node1 - The following steps are involved: Case-2
+#### Compute Node1 -  The packet flow is as mentioned below: Case-2
 
 1. For VLAN project networks:
     - The VLAN interface forwards the packet to the Open vSwitch VLAN bridge `br-vlan`.
@@ -264,4 +264,132 @@ For instances with a floating IP address, the network node routes north-south ne
 4. Security group rules (4) on the Linux bridge `qbr` handle firewalling and state tracking for the packet.
 5. The Linux bridge `qbr` forwards the packet to the tap interface (5) on instance 1.
 
+## Case 3: East-west for instances on different networks 
+
 <img width="989" height="587" alt="image" src="https://github.com/user-attachments/assets/0a417e1a-5681-46cb-8208-1e9e3c8cdc69" />
+
+For instances with a fixed or floating IP address, the network node routes east-west network traffic among project networks using the same project router.
+
+- Project network 1
+  - Network: 192.168.1.0/24
+  - Gateway: 192.168.1.1 with MAC address TG1
+- Project network 2
+  - Network: 192.168.2.0/24
+  - Gateway: 192.168.2.1 with MAC address TG2
+- Compute node 1
+  - Instance 1: 192.168.1.11 with MAC address I1
+- Compute node 2
+  - Instance 2: 192.168.2.11 with MAC address I2
+- Instance 1 resides on compute node 1 and uses project network 1.
+- Instance 2 resides on compute node 2 and uses project network 2.
+- Both project networks reside on the same router.
+- Instance 1 sends a packet to instance 2.
+
+#### Compute Node1 -  The packet flow is as mentioned below: Case-3
+
+1. The instance 1 `tap` interface (1) forwards the packet to the Linux bridge `qbr`. The packet contains destination MAC address TG1 because the destination resides on another network.
+2. Security group rules (2) on the Linux bridge `qbr` handle state tracking for the packet.
+3. The Linux bridge `qbr` forwards the packet to the Open vSwitch integration bridge `br-int`.
+4. The Open vSwitch integration bridge `br-int` adds the internal tag for project network 1.
+5. For VLAN project networks:
+   - The Open vSwitch integration bridge `br-int` forwards the packet to the Open vSwitch VLAN bridge `br-vlan`.
+   - The Open vSwitch VLAN bridge `br-vlan` replaces the internal tag with the actual VLAN tag of project network 1.
+   - The Open vSwitch VLAN bridge `br-vlan` forwards the packet to the network node via the VLAN interface.
+6. For VXLAN and GRE project networks:
+   - The Open vSwitch integration bridge `br-int` forwards the packet to the Open vSwitch tunnel bridge `br-tun`.
+   - The Open vSwitch tunnel bridge `br-tun` wraps the packet in a VXLAN or GRE tunnel and adds a tag to identify project network
+   - The Open vSwitch tunnel bridge `br-tun` forwards the packet to the network node via the tunnel interface.
+
+<img width="1010" height="535" alt="image" src="https://github.com/user-attachments/assets/cbbfecf6-a7fc-4bab-b127-006d2e4f3b67" />
+
+#### Network node -  The packet flow is as mentioned below: Case-3
+
+<img width="1010" height="527" alt="image" src="https://github.com/user-attachments/assets/5d256ead-0a26-49c0-a9de-8fff80b1d99a" />
+
+1. For VLAN project networks:
+   - The VLAN interface forwards the packet to the Open vSwitch VLAN bridge `br-vlan`.
+   - The Open vSwitch VLAN bridge `br-vlan` forwards the packet to the Open vSwitch integration bridge `br-int`.
+   - The Open vSwitch integration bridge `br-int` replaces the actual VLAN tag of project network 1 with the internal tag.
+2. For VXLAN and GRE project networks:
+   - The tunnel interface forwards the packet to the Open vSwitch tunnel bridge `br-tun`.
+   - The Open vSwitch tunnel bridge `br-tun` unwraps the packet and adds the internal tag for project network 1.
+   - The Open vSwitch tunnel bridge `br-tun` forwards the packet to the Open vSwitch integration bridge `br-int`.
+3. The Open vSwitch integration bridge `br-int` forwards the packet to the `qr-1` interface (3) in the router namespace qrouter. The `qr-1` interface contains the project network 1 gateway IP address TG1.
+4. The router namespace qrouter routes the packet to the `qr-2` interface (4). The `qr-2` interface contains the project network 2 gateway IP address TG2.
+5. The router namespace qrouter forwards the packet to the Open vSwitch integration bridge `br-int`.
+6. The Open vSwitch integration bridge `br-int` adds the internal tag for project network 2.
+7. For VLAN project networks:
+   - The Open vSwitch integration bridge `br-int` forwards the packet to the Open vSwitch VLAN bridge `br-vlan`.
+   - The Open vSwitch VLAN bridge `br-vlan` replaces the internal tag with the actual VLAN tag of project network 2.
+   - The Open vSwitch VLAN bridge `br-vlan` forwards the packet to compute node 2 via the VLAN interface.
+8. For VXLAN and GRE project networks:
+   - The Open vSwitch integration bridge `br-int` forwards the packet to the Open vSwitch tunnel bridge `br-tun`.
+   - The Open vSwitch tunnel bridge `br-tun` wraps the packet in a VXLAN or GRE tunnel and adds a tag to identify project network 2
+   - The Open vSwitch tunnel bridge `br-tun` forwards the packet to compute node 2 via the tunnel interface.
+
+#### Compute Node2 -  The packet flow is as mentioned below: Case-3
+
+<img width="1013" height="550" alt="image" src="https://github.com/user-attachments/assets/2efc0006-bae1-4ab0-bc50-417747509e3e" />
+
+1. For VLAN project networks:
+  The VLAN interface forwards the packet to the Open vSwitch VLAN bridge `br-vlan`.
+  The Open vSwitch VLAN bridge `br-vlan` forwards the packet to the Open vSwitch integration bridge `br-int`.
+  The Open vSwitch integration bridge `br-int` replaces the actual VLAN tag of project network 2 with the internal tag.
+2. For VXLAN and GRE project networks:
+  The tunnel interface forwards the packet to the Open vSwitch tunnel bridge `br-tun`.
+  The Open vSwitch tunnel bridge `br-tun` unwraps the packet and adds the internal tag for project network 2.
+  The Open vSwitch tunnel bridge `br-tun` forwards the packet to the Open vSwitch integration bridge `br-int`.
+3. The Open vSwitch integration bridge `br-int` forwards the packet to the Linux bridge `qbr`.
+4. Security group rules (5) on the Linux bridge `qbr` handle firewalling and state tracking for the packet.
+5. The Linux bridge `qbr` forwards the packet to the tap interface (6) on instance 2.
+
+## Case 4: East-west for instances on the same network
+
+
+For instances with a fixed or floating IP address, the project network switches east-west network traffic among instances without using a project router on the network node.
+
+- Project network
+  - Network: `192.168.1.0/24`
+- Compute node 1
+  - Instance 1: `192.168.1.11` with MAC address I1
+- Compute node 2
+  - Instance 2: `192.168.1.12` with MAC address I2
+- Instance 1 resides on compute node 1.
+- Instance 2 resides on compute node 2.
+- Both instances use the same project network.
+- Instance 1 sends a packet to instance 2.
+- The Open vSwitch agent handles switching within the project network.
+
+#### Compute Node1 -  The packet flow is as mentioned below: Case-4
+
+<img width="1013" height="550" alt="image" src="https://github.com/user-attachments/assets/40bbb93b-d435-493e-85a2-755f087f83ea" />
+
+1. The instance 1 tap interface (1) forwards the packet to the VLAN bridge `qbr`. The packet contains destination MAC address I2 because the destination resides on the same network.
+2. Security group rules (2) on the provider bridge qbr handle state tracking for the packet.
+3. The Linux bridge `qbr` forwards the packet to the Open vSwitch integration bridge `br-int`.
+4. The Open vSwitch integration bridge `br-int` adds the internal tag for provider network 1.
+5. For VLAN project networks:
+   - The Open vSwitch integration bridge `br-int` forwards the packet to the Open vSwitch VLAN bridge br-vlan.
+   - The Open vSwitch VLAN bridge `br-vlan` replaces the internal tag with the actual VLAN tag of project network 1.
+   - The Open vSwitch VLAN bridge `br-vlan` forwards the packet to the compute node 2 via the VLAN interface.
+6. For VXLAN and GRE project networks:
+   - The Open vSwitch integration bridge `br-int` forwards the packet to the Open vSwitch tunnel bridge `br-tun`.
+   - The Open vSwitch tunnel bridge `br-tun` wraps the packet in a VXLAN or GRE tunnel and adds a tag to identify project network-1
+   - The Open vSwitch tunnel bridge `br-tun` forwards the packet to the compute node 2 via the tunnel interface.
+
+#### Compute Node2 -  The packet flow is as mentioned below: Case-4
+
+<img width="1013" height="599" alt="image" src="https://github.com/user-attachments/assets/70a3dcfb-6559-400d-8588-e4d6b1beb5d5" />
+
+
+1. For VLAN project networks:
+   - The VLAN interface forwards the packet to the Open vSwitch VLAN bridge `br-vlan`.
+   - The Open vSwitch VLAN bridge `br-vlan` forwards the packet to the Open vSwitch integration bridge `br-int`.
+   - The Open vSwitch integration bridge `br-int` replaces the actual VLAN tag of project network 2 with the internal tag.
+2. For VXLAN and GRE project networks:
+   - The tunnel interface forwards the packet to the Open vSwitch tunnel bridge `br-tun`.
+   - The Open vSwitch tunnel bridge `br-tun` unwraps the packet and adds the internal tag for project network 2.
+   - The Open vSwitch tunnel bridge `br-tun` forwards the packet to the Open vSwitch integration bridge `br-int`.
+3. The Open vSwitch integration bridge `br-int` forwards the packet to the Linux bridge `qbr`.
+4. Security group rules (3) on the Linux bridge `qbr` handle firewalling and state tracking for the packet.
+5. The Linux bridge `qbr` forwards the packet to the tap interface (4) on instance 2.
